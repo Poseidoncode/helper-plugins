@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "platformio-community": {
+      "command": "pio",
+      "args": ["mcp", "server"]
+    }
+  }
+}

@@ -1,0 +1,221 @@
+{
+  "schemaVersion": 1,
+  "name": "Helper Official Marketplace",
+  "description": "Curated official firmware delivery tools, skills, and MCP adapters",
+  "updatedAt": "2026-09-01T00:00:00Z",
+  "plugins": [
+    {
+      "id": "firmware-release-evidence",
+      "name": "firmware-release-evidence",
+      "displayName": "Firmware Release Evidence",
+      "version": "1.0.0",
+      "category": "DevTools",
+      "description": "Generate reproducible firmware release evidence (git state, build metadata, test reports, checksums, SBOM refs).",
+      "longDescription": "Inspects local git repository dirty state, firmware target board, build exit codes, unit/integration test reports, and generates deterministic release-evidence.json and release-evidence.md reports with SHA-256 binary manifests.",
+      "author": "Helper Firmware WG",
+      "type": "skill",
+      "tags": ["firmware", "embedded", "release", "evidence", "reproducibility", "audit"],
+      "sourceUrl": "https://github.com/Poseidoncode/helper-plugins.git",
+      "gitRef": "main",
+      "skills": ["firmware-release-evidence"],
+      "promptStarters": [
+        "Inspect the current firmware project and generate structured release-evidence.json and release-evidence.md in ./build/artifacts.",
+        "Verify git clean status and validate binary checksums before release staging."
+      ]
+    },
+    {
+      "id": "platformio-community",
+      "name": "platformio-community",
+      "displayName": "PlatformIO Community Adapter",
+      "version": "1.0.0",
+      "category": "DevTools",
+      "description": "Curated MCP adapter for PlatformIO: device discovery, build, flash preflight, flash, and bounded serial monitor.",
+      "longDescription": "PlatformIO Community MCP adapter provides direct integration with PlatformIO toolchains. Supports serial port/board discovery, project environment inspection, compilation, flash preflight with target validation, hardware flashing with explicit confirmation, and bounded serial monitoring.",
+      "author": "PlatformIO Community / Helper",
+      "type": "mcp",
+      "tags": ["firmware", "embedded", "platformio", "flash", "serial", "iot"],
+      "sourceUrl": "https://github.com/Poseidoncode/helper-plugins.git",
+      "gitRef": "main",
+      "mcpSpec": {
+        "command": "pio",
+        "args": ["mcp", "server"]
+      },
+      "promptStarters": [
+        "Discover connected microcontrollers and list active serial ports.",
+        "Run PlatformIO build for target environment nodemcu-32s.",
+        "Perform flash preflight check for /dev/ttyUSB0 before firmware flash."
+      ]
+    },
+    {
+      "id": "firmware-sbom",
+      "name": "firmware-sbom",
+      "displayName": "Firmware SBOM & Vulnerability Scanner",
+      "version": "1.0.0",
+      "category": "DevTools",
+      "description": "Generate CycloneDX / SPDX SBOM and scan embedded components for known vulnerabilities.",
+      "longDescription": "Firmware SBOM and vulnerability scanning tool. Generates standard CycloneDX and SPDX Software Bill of Materials for firmware projects, performs offline/online vulnerability cross-referencing against OSV/NVD databases, and outputs license compliance summaries.",
+      "author": "Helper Security WG",
+      "type": "mcp",
+      "tags": ["sbom", "cyclonedx", "spdx", "security", "vulnerability", "license"],
+      "sourceUrl": "https://github.com/Poseidoncode/helper-plugins.git",
+      "gitRef": "main",
+      "mcpSpec": {
+        "command": "helper-sbom",
+        "args": ["--stdio"]
+      },
+      "promptStarters": [
+        "Generate CycloneDX SBOM for the current firmware workspace.",
+        "Scan component dependencies for known CVEs and produce a vulnerability report."
+      ]
+    },
+    {
+      "id": "firmware-secret-scan",
+      "name": "firmware-secret-scan",
+      "displayName": "Firmware Secret Scanner",
+      "version": "1.0.0",
+      "category": "DevTools",
+      "description": "Scan repository, configs, and firmware artifacts for secrets and tokens with automatic redaction.",
+      "longDescription": "Read-only security scanner designed for firmware and embedded codebases. Detects embedded API keys, Wi-Fi credentials, private keys, and token strings across code and artifact outputs with strict finding redaction.",
+      "author": "Helper Security WG",
+      "type": "mcp",
+      "tags": ["security", "secret", "redaction", "audit", "credentials"],
+      "sourceUrl": "https://github.com/Poseidoncode/helper-plugins.git",
+      "gitRef": "main",
+      "mcpSpec": {
+        "command": "helper-secret-scan",
+        "args": ["--stdio"]
+      },
+      "promptStarters": [
+        "Scan repository source files and configuration headers for exposed credentials or secrets."
+      ]
+    },
+    {
+      "id": "github-release-workflow",
+      "name": "github-release-workflow",
+      "displayName": "GitHub Release Workflow",
+      "version": "1.0.0",
+      "category": "DevTools",
+      "description": "Read release evidence, draft structured release notes, and create GitHub release drafts.",
+      "longDescription": "Automated GitHub release workflow skill for firmware deliveries. Parses release-evidence.json, generates formatted markdown release notes, verifies tag/checksum consistency, and creates GitHub Release drafts safely.",
+      "author": "Helper Firmware WG",
+      "type": "skill",
+      "tags": ["github", "release", "workflow", "draft", "automation"],
+      "sourceUrl": "https://github.com/Poseidoncode/helper-plugins.git",
+      "gitRef": "main",
+      "skills": ["github-release-workflow"],
+      "promptStarters": [
+        "Draft GitHub release notes from release-evidence.json and verify all artifact checksums.",
+        "Create a GitHub Release draft for tag v1.0.0 with binary assets attached."
+      ]
+    }
+  ],
+  "profiles": [
+    {
+      "id": "platformio-release",
+      "name": "platformio-release",
+      "displayName": "PlatformIO Release",
+      "description": "Complete firmware delivery pipeline with PlatformIO, SBOM, evidence generation, and release draft.",
+      "recommendedPlugins": [
+        "firmware-release-evidence",
+        "platformio-community",
+        "firmware-sbom",
+        "firmware-secret-scan",
+        "github-release-workflow"
+      ],
+      "serverAllowlist": {
+        "platformio-community": [
+          "discover_devices",
+          "inspect_project",
+          "build",
+          "flash_preflight",
+          "flash",
+          "monitor_serial"
+        ],
+        "firmware-sbom": [
+          "generate_sbom",
+          "scan_vulnerabilities",
+          "license_summary"
+        ],
+        "firmware-secret-scan": [
+          "scan_secrets",
+          "check_ignore_rules"
+        ],
+        "github": [
+          "get_issue",
+          "list_issues",
+          "create_release_draft",
+          "upload_release_asset"
+        ]
+      }
+    },
+    {
+      "id": "esp-idf-release",
+      "name": "esp-idf-release",
+      "displayName": "ESP-IDF Release",
+      "description": "Firmware delivery pipeline for Espressif ESP-IDF projects.",
+      "recommendedPlugins": [
+        "firmware-release-evidence",
+        "esp-idf-adapter",
+        "firmware-sbom",
+        "firmware-secret-scan",
+        "github-release-workflow"
+      ],
+      "serverAllowlist": {
+        "esp-idf-adapter": [
+          "inspect_project",
+          "check_target",
+          "build",
+          "test",
+          "flash_preflight",
+          "flash",
+          "monitor"
+        ],
+        "firmware-sbom": [
+          "generate_sbom",
+          "scan_vulnerabilities"
+        ],
+        "firmware-secret-scan": [
+          "scan_secrets"
+        ],
+        "github": [
+          "create_release_draft",
+          "upload_release_asset"
+        ]
+      }
+    },
+    {
+      "id": "zephyr-release",
+      "name": "zephyr-release",
+      "displayName": "Zephyr RTOS Release",
+      "description": "Firmware delivery pipeline for Zephyr RTOS and West workspaces.",
+      "recommendedPlugins": [
+        "firmware-release-evidence",
+        "zephyr-adapter",
+        "firmware-sbom",
+        "firmware-secret-scan",
+        "github-release-workflow"
+      ],
+      "serverAllowlist": {
+        "zephyr-adapter": [
+          "inspect_workspace",
+          "diagnose_kconfig",
+          "build",
+          "twister_summary",
+          "flash_preflight",
+          "flash"
+        ],
+        "firmware-sbom": [
+          "generate_sbom",
+          "scan_vulnerabilities"
+        ],
+        "firmware-secret-scan": [
+          "scan_secrets"
+        ],
+        "github": [
+          "create_release_draft",
+          "upload_release_asset"
+        ]
+      }
+    }
+  ]
+}

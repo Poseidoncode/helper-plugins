@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "name": "firmware-release-evidence",
+  "version": "1.0.0",
+  "helper": ">=0.1.0",
+  "capabilities": ["skills"],
+  "skills": ["SKILL.md"]
+}

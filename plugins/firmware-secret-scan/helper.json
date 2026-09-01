@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "name": "firmware-secret-scan",
+  "version": "1.0.0",
+  "helper": ">=0.1.0",
+  "capabilities": ["tools", "skills"],
+  "skills": ["SKILL.md"],
+  "extensions": ["mcp.json"]
+}
