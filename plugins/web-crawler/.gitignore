@@ -1,0 +1,6 @@
+# Binaries
+web-crawler
+web-crawler.exe
+*.exe
+*.test
+*.out

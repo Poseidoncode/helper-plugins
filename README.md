@@ -11,6 +11,7 @@ This repository hosts the official curated plugins, skills, and MCP adapter conf
 | [`firmware-sbom`](./plugins/firmware-sbom) | MCP | CycloneDX & SPDX SBOM generator with vulnerability scanning. |
 | [`firmware-secret-scan`](./plugins/firmware-secret-scan) | MCP | Read-only credential & secret scanner with automatic finding redaction. |
 | [`github-release-workflow`](./plugins/github-release-workflow) | Skill | Drafts structured release notes and creates safe GitHub Release drafts. |
+| [`web-crawler`](./plugins/web-crawler) | MCP | High-performance scraping and rendering engine using Colly, Goquery, and Chromedp. |
 
 ---
 

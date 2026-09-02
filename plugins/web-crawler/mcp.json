@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "web-crawler": {
+      "command": "web-crawler",
+      "args": ["--stdio"]
+    }
+  }
+}

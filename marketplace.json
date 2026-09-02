@@ -107,6 +107,30 @@
         "Draft GitHub release notes from release-evidence.json and verify all artifact checksums.",
         "Create a GitHub Release draft for tag v1.0.0 with binary assets attached."
       ]
+    },
+    {
+      "id": "web-crawler",
+      "name": "web-crawler",
+      "displayName": "Web Crawler & Scraper (Colly + Chromedp)",
+      "version": "1.0.0",
+      "category": "DevTools",
+      "description": "High-performance web scraping and crawling engine powered by Colly, Goquery, and Chromedp.",
+      "longDescription": "Dual-path web extraction engine: ultra-fast static HTML scraping and Markdown conversion via Colly + Goquery, and full dynamic JavaScript/SPA rendering with screenshot support via Chromedp Headless Chrome.",
+      "author": "Helper Ecosystem WG",
+      "type": "mcp",
+      "tags": ["scraper", "crawler", "colly", "chromedp", "goquery", "markdown", "browser"],
+      "sourceUrl": "https://github.com/Poseidoncode/helper-plugins.git",
+      "gitRef": "main",
+      "skills": ["web-crawler"],
+      "mcpSpec": {
+        "command": "web-crawler",
+        "args": ["--stdio"]
+      },
+      "promptStarters": [
+        "Scrape documentation from a target URL and convert it to clean Markdown.",
+        "Render a dynamic JavaScript web page and extract loaded data using Headless Chrome.",
+        "Crawl pages within a documentation domain with bounded depth and rate limiting."
+      ]
     }
   ],
   "profiles": [
