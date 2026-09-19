@@ -12,6 +12,7 @@ This repository hosts the official curated plugins, skills, and MCP adapter conf
 | [`firmware-secret-scan`](./plugins/firmware-secret-scan) | MCP | Read-only credential & secret scanner with automatic finding redaction. |
 | [`github-release-workflow`](./plugins/github-release-workflow) | Skill | Drafts structured release notes and creates safe GitHub Release drafts. |
 | [`web-crawler`](./plugins/web-crawler) | MCP | High-performance scraping and rendering engine using Colly, Goquery, and Chromedp. |
+| [`cursor-models`](./plugins/cursor-models) | MCP | High-performance bridge enabling Cursor AI models (Claude Sonnet 4.6, Opus 4.8, GPT-5.5) in Helper. |
 
 ---
 

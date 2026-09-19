@@ -131,6 +131,46 @@
         "Render a dynamic JavaScript web page and extract loaded data using Headless Chrome.",
         "Crawl pages within a documentation domain with bounded depth and rate limiting."
       ]
+    },
+    {
+      "id": "cursor-models",
+      "name": "cursor-models",
+      "displayName": "Cursor Models Provider",
+      "version": "1.0.0",
+      "category": "Infrastructure",
+      "description": "Zero-code modification provider to enable Cursor models (Claude Sonnet 4.6, Opus 4.8, GPT-5.5) in Helper.",
+      "longDescription": "High-performance bridge and MCP server for Cursor AI models. Connects Helper to Cursor via HTTP/2 ConnectRPC with full streaming, reasoning tokens, local Bearer token security, and automatic api-config.json registration.",
+      "author": "Helper Ecosystem WG",
+      "type": "mcp",
+      "tags": ["cursor", "llm", "claude", "gpt-5", "provider", "streaming"],
+      "sourceUrl": "https://github.com/Poseidoncode/helper-plugins.git",
+      "gitRef": "main",
+      "skills": ["cursor-models"],
+      "mcpSpec": {
+        "command": "node",
+        "args": ["plugins/cursor-models/src/index.mjs"]
+      },
+      "envSpecs": [
+        {
+          "name": "CURSOR_AUTH_TOKEN",
+          "description": "Optional: Explicit Cursor API Key or Auth Token. If omitted, automatically reads ~/.helper/cursor-api-key or ~/.pi/agent/auth.json.",
+          "required": false,
+          "secret": true,
+          "placeholder": "crsr_... (optional)"
+        },
+        {
+          "name": "PORT",
+          "description": "Port for local OpenAI-compatible HTTP bridge (default: 4646).",
+          "required": false,
+          "secret": false,
+          "default": "4646"
+        }
+      ],
+      "promptStarters": [
+        "Check status and active connectivity of the Cursor models bridge.",
+        "Force sync Cursor model definitions into Helper api-config.json.",
+        "Switch my active model to Cursor Claude Sonnet 4.6 for complex refactoring."
+      ]
     }
   ],
   "profiles": [

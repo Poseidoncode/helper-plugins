@@ -1,0 +1,30 @@
+{
+  "name": "helper-plugin-cursor-models",
+  "version": "1.0.0",
+  "description": "Cursor Models Provider and MCP Adapter for Helper",
+  "type": "module",
+  "bin": {
+    "cursor-bridge": "./bin/cursor-bridge.mjs"
+  },
+  "main": "src/index.mjs",
+  "scripts": {
+    "start": "node src/index.mjs",
+    "mcp": "node src/index.mjs --mcp",
+    "daemon": "node src/index.mjs --daemon",
+    "status": "node src/index.mjs --status",
+    "sync": "node src/index.mjs --sync"
+  },
+  "keywords": [
+    "helper",
+    "mcp",
+    "cursor",
+    "llm",
+    "claude",
+    "provider"
+  ],
+  "author": "Helper Ecosystem WG",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@cursor/sdk": "^0.1.0"
+  }
+}
