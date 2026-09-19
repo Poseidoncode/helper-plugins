@@ -17,6 +17,7 @@
       "tags": ["firmware", "embedded", "release", "evidence", "reproducibility", "audit"],
       "sourceUrl": "https://github.com/Poseidoncode/helper-plugins.git",
       "gitRef": "main",
+      "subpath": "plugins/firmware-release-evidence",
       "skills": ["firmware-release-evidence"],
       "promptStarters": [
         "Inspect the current firmware project and generate structured release-evidence.json and release-evidence.md in ./build/artifacts.",
@@ -36,6 +37,7 @@
       "tags": ["firmware", "embedded", "platformio", "flash", "serial", "iot"],
       "sourceUrl": "https://github.com/Poseidoncode/helper-plugins.git",
       "gitRef": "main",
+      "subpath": "plugins/platformio-community",
       "mcpSpec": {
         "command": "pio",
         "args": ["mcp", "server"]
@@ -59,6 +61,7 @@
       "tags": ["sbom", "cyclonedx", "spdx", "security", "vulnerability", "license"],
       "sourceUrl": "https://github.com/Poseidoncode/helper-plugins.git",
       "gitRef": "main",
+      "subpath": "plugins/firmware-sbom",
       "mcpSpec": {
         "command": "helper-sbom",
         "args": ["--stdio"]
@@ -81,6 +84,7 @@
       "tags": ["security", "secret", "redaction", "audit", "credentials"],
       "sourceUrl": "https://github.com/Poseidoncode/helper-plugins.git",
       "gitRef": "main",
+      "subpath": "plugins/firmware-secret-scan",
       "mcpSpec": {
         "command": "helper-secret-scan",
         "args": ["--stdio"]
@@ -102,6 +106,7 @@
       "tags": ["github", "release", "workflow", "draft", "automation"],
       "sourceUrl": "https://github.com/Poseidoncode/helper-plugins.git",
       "gitRef": "main",
+      "subpath": "plugins/github-release-workflow",
       "skills": ["github-release-workflow"],
       "promptStarters": [
         "Draft GitHub release notes from release-evidence.json and verify all artifact checksums.",
@@ -121,6 +126,7 @@
       "tags": ["scraper", "crawler", "colly", "chromedp", "goquery", "markdown", "browser"],
       "sourceUrl": "https://github.com/Poseidoncode/helper-plugins.git",
       "gitRef": "main",
+      "subpath": "plugins/web-crawler",
       "skills": ["web-crawler"],
       "mcpSpec": {
         "command": "web-crawler",
@@ -145,10 +151,11 @@
       "tags": ["cursor", "llm", "claude", "gpt-5", "provider", "streaming"],
       "sourceUrl": "https://github.com/Poseidoncode/helper-plugins.git",
       "gitRef": "main",
+      "subpath": "plugins/cursor-models",
       "skills": ["cursor-models"],
       "mcpSpec": {
         "command": "node",
-        "args": ["plugins/cursor-models/src/index.mjs"]
+        "args": ["src/index.mjs"]
       },
       "envSpecs": [
         {
