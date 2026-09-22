@@ -48,3 +48,15 @@ the directory. All Helper-specific behaviour lives in `scripts/`
 (the `recalc.py` entry point and the `scripts/office/` thin wrappers),
 which treat `engine/` as a read-only dependency loaded via `importlib`
 or executed as a subprocess.
+
+## Local patches (divergence log)
+
+The following minimal fixes are applied on top of upstream. Re-apply
+(or drop, if fixed upstream) after every re-vendor:
+
+1. **Absolute worksheet rel targets** (`formula_check.py`
+   `get_sheet_files`, `style_audit.py` rel mapping): normalize
+   `Target="/xl/worksheets/….xml"` (as written by openpyxl) before
+   prefixing with `xl/`. Without this, every sheet is silently
+   skipped (`sheets_checked: []`) on openpyxl-created files — the
+   skill's own primary creation path.

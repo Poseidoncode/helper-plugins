@@ -91,7 +91,9 @@ def get_sheet_files(z: zipfile.ZipFile) -> dict[str, str]:
         rid = rel.get("Id", "")
         target = rel.get("Target", "")
         if "worksheets" in target:
-            # Target may be relative: "worksheets/sheet1.xml" -> "xl/worksheets/sheet1.xml"
+            # Target may be relative ("worksheets/sheet1.xml") or absolute
+            # ("/xl/worksheets/sheet1.xml", as written by openpyxl).
+            target = target.lstrip("/")
             if not target.startswith("xl/"):
                 target = "xl/" + target
             mapping[rid] = target

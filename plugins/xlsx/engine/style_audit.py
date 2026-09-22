@@ -419,6 +419,9 @@ def _load_from_xlsx(xlsx_path: str) -> tuple[bytes, list[tuple[str, bytes]]]:
             rid = rel.get("Id", "")
             target = rel.get("Target", "")
             if "worksheets" in target:
+                # Absolute targets ("/xl/worksheets/…", as written by
+                # openpyxl) must be normalized before prefixing.
+                target = target.lstrip("/")
                 if not target.startswith("xl/"):
                     target = "xl/" + target
                 rid_to_path[rid] = target
