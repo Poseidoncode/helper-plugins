@@ -1,49 +1,38 @@
-# Raw-XML Escape Hatch — surgical edits without openpyxl
+# Fidelity Notes — files Excelize round-trips carefully
 
-## 1. No-go table: files openpyxl cannot safely round-trip
+Replaces the old raw-XML escape hatch: there is no unpack/pack loop
+anymore, because Excelize preserves package parts (charts, drawings,
+most metadata) across open→save. What remains is a verify list.
 
-| Artefact | Symptom of round-tripping | Path |
+## 1. Care table: files needing human verification in Excel
+
+| Artefact | Status | Path |
 |---|---|---|
-| VBA macros (`.xlsm`) | Macro project stripped or corrupted | Hatch (or keep `.xlsm` out of scope) |
-| Pivot caches | Cache definitions dropped; pivots go blank | Hatch |
-| Slicers (`xl/slicers/*.xml`) | GUID-bound cache refs severed | Hatch (transplant only, never author) |
-| External connections / links | Connection strings lost | Hatch |
-| LibreOffice-rewritten mergeCells | `TypeError: expected <class 'int'>` on load | Hatch, or `read_only` readback |
+| VBA macros (`.xlsm`) | NOT supported — do not round-trip macro workbooks | Keep out of scope or edit in Excel |
+| Pivot tables | Structure preserved; values NOT recalculated by the engine | Refresh in Excel, verify totals |
+| Slicers | Cannot be authored; template-inherit only (rule 6) | Verify wiring in Excel |
+| External connections / links | Preserved as XML; values depend on the source | Refresh in Excel |
+| Array / dynamic-array formulas | NOT evaluated (`unsupported_function`) | Verify in Excel (rule 10) |
+| Charts | Creatable (`AddChart`) and preserved | Verify rendering in Excel |
 
-If any row applies: do not `load_workbook` + `save`. Ever.
+If any row except charts applies: prefer `read` (inspection is
+always safe) and make edits in Excel, or restrict programmatic
+edits to plain value cells and re-verify the artefact in Excel.
 
-## 2. The loop
+## 2. Safe operations on complex files
 
-```bash
-python scripts/office/unpack.py input.xlsx /tmp/work/
-# edit XML under /tmp/work (see §3), or run engine helpers:
-python engine/xlsx_insert_row.py /tmp/work --at 5 --formula "A5*2"
-python scripts/office/validate.py /tmp/wrapped.xlsx   # after pack
-python scripts/office/pack.py /tmp/work/ output.xlsx
-python scripts/recalc.py output.xlsx 60
-```
+- Reading (`read`, `validate`) never modifies the source.
+- Editing assumption cells and adding plain formulas is safe; the
+  engine only touches the sheets/cells you address plus `calcPr`.
+- `recalc` sets `FullCalcOnLoad`, so Excel recomputes everything —
+  including pivots and array formulas — on open. The report's
+  `values` map covers only engine-evaluated cells.
 
-`unpack.py` pretty-prints the XML and reports high-risk content
-(VBA, pivots, slicers) before you touch anything. `pack.py`
-re-zips and validates well-formedness.
+## 3. Slicer path (rule 6, template inheritance)
 
-## 3. What to edit by hand (and what not to)
-
-- Safe: `<v>` cached values (recalc overwrites anyway), `<f>`
-  formula text, simple `<c>` insertions following existing patterns.
-- Careful: shared formulas (`t="shared"`, `si` groups) — prefer
-  `xlsx_insert_row.py` / `xlsx_shift_rows.py`, which keep them
-  coherent (`create-edit-guide.md` §9).
-- Do not hand-edit: `sharedStrings.xml` indices (use
-  `engine/shared_strings_builder.py`), pivot cache XML, slicer XML
-  beyond transplanting an intact part from a known-good template.
-
-## 4. Slicer transplant (rule 6, path b)
-
-1. Author the slicer once in Excel/LibreOffice against a named
-   range; save as `template.xlsx`.
-2. `unpack.py` both template and target.
-3. Copy the intact `xl/slicers/*.xml` part + its `.rels` +
-   `[Content_Types].xml` entries into the target tree.
-4. `pack.py`, then open in Excel/LibreOffice and verify the slicer
-   is wired before delivery.
+1. Author the slicer once in Excel against a named range;
+   save as `template.xlsx`.
+2. Open the template programmatically, write data into the named
+   range, save as new.
+3. Open the result in Excel and confirm the slicer is wired before
+   delivery. No template → say so, never downgrade silently.

@@ -1,124 +1,105 @@
-# Recalc Guide — `scripts/recalc.py` reference
+# Recalc Guide — `xlsx recalc` reference
 
 ## 1. What it does
 
-`recalc.py` is the mandatory final step before delivery. It
-recalculates every formula and reports workbook health as a single
-JSON object on stdout (diagnostics go to stderr):
-
 ```bash
-python scripts/recalc.py mau_forecast.xlsx 30
+bin/xlsx recalc mau_forecast.xlsx
 ```
 
 ```json
 {
   "status": "success",
   "total_errors": 0,
-  "total_formulas": 42
+  "total_formulas": 42,
+  "values": { "Model!E2": "3396.6" }
 }
 ```
 
-Pipeline: static raw-XML pre-scan → LibreOffice headless
-`--convert-to` recalculation (when available) → raw-XML scan of the
-*recalculated* bytes → in-place atomic replace (or `--output`) →
-JSON report. Full pipeline detail lives in the script docstring.
+Pipeline: enumerate every formula cell → evaluate with the Excelize
+calc engine → set `FullCalcOnLoad` → save (in place, or `--output`)
+→ JSON report. No Python, no LibreOffice, no subprocess per file.
 
 ## 2. JSON schema
 
 | Key | Type | Meaning |
 |---|---|---|
-| `status` | string | `success` / `errors_found` / `error` (unreadable file, recalc failure) |
+| `status` | string | `success` / `errors_found` / `error` (unreadable, save failed) |
 | `file` | string | Input path as given |
-| `sheets_checked` | string[] | Sheets actually scanned |
-| `total_formulas` | int | Distinct formula cells (shared-formula consumers counted once) |
-| `total_errors` | int | All findings (hard errors + heuristic warnings) |
-| `shared_formula_ranges` | int | Shared-formula definition ranges |
-| `error_summary` | object | Marker/type → `{count, locations[]}` (≤20 locations each, then `truncated: true`) |
+| `sheets_checked` | string[] | Sheets scanned |
+| `total_formulas` | int | Formula cells evaluated |
+| `total_errors` | int | All findings (markers + unsupported) |
+| `error_summary` | object | Marker/type → `{count, locations[]}` (≤20 each, then `truncated`) |
 | `errors` | array | Full findings (capped at 100, see `errors_truncated`) |
-| `errors_truncated` | bool | True when `errors` was capped |
-| `recalc` | object | `{performed, reason, libreoffice}` — see §4 |
-| `scanner` | string | Always `raw_xml` (see §10) |
-| `compatibility_hint` | string | `raw_xml_only` after a LibreOffice rewrite, else `none` (see §10) |
+| `values` | object | Fresh results: `Sheet!Cell` → value (capped at 10k, see `values_truncated`) |
+| `recalc` | object | `{performed, engine, full_calc_on_load}` |
+| `scanner` | string | Always `excelize_calc` |
 
 Exit codes: `0` = success, `1` = errors_found, `2` = error.
 
-## 3. The seven error markers
+Each error carries `type` (`error_value` or `unsupported_function`),
+`error` (marker), `sheet`, `cell`, `formula`, and `detail` (engine
+message). `unsupported_function` additionally means rule 10 applies.
 
-`#REF!` `#DIV/0!` `#VALUE!` `#NAME?` `#NULL!` `#NUM!` `#N/A`.
-`error_summary` is keyed by marker for error-value cells
-(`Model!C3`-style locations), plus structural keys:
-`broken_sheet_ref`, `unknown_name_ref` (heuristic — verify manually),
-`malformed_error_cell`, `file_error`.
+## 3. Error markers and engine skew
 
-## 4. The `recalc` object
+Standard markers surface as-is: `#REF!` `#DIV/0!` `#VALUE!`
+`#NAME?` `#NULL!` `#NUM!` `#N/A`. Two known skews vs Excel:
 
-| `performed` | `reason` | Meaning |
-|---|---|---|
-| true | `libreoffice_headless_convert` | Full dynamic recalculation done |
-| false | `static_only_flag` | `--static-only` given; cached values scanned |
-| false | `libreoffice_not_found` | Graceful degradation: static scan only |
-| false | `libreoffice_failed` | `status` is `error`; see `errors[0].message` |
+- A reference to a **missing sheet** reports `#NAME?` (Excel
+  reports `#REF!`). The finding carries the formula text — treat
+  any `#NAME?` with a `Sheet!` ref as a broken reference.
+- A missing lookup reports `#N/A` with detail
+  (`VLOOKUP no result found`) — same marker as Excel.
 
-A static-only `success` is weaker than a recalculated one: runtime
-errors (`#DIV/0!` on empty denominators) hide in stale caches. Always
-rerun on a host with LibreOffice before delivery (§8).
+## 4. Why `values`, not cached `<v>`
 
-## 5. Timeouts
+The public Excelize API removes a cell's formula when a value is set
+on it, so rewriting caches would destroy the model. `recalc`
+therefore leaves `<v>` untouched and returns authoritative results
+in `values`. Consequences:
 
-Default 60s (second positional arg). Heavy workbooks hang LibreOffice:
-raise to 180 (`recalc.py file.xlsx 180`); if it persists, the file
-likely contains constructs LibreOffice chokes on (thousands of
-volatile functions, external links) — split the model or pre-compute
-the volatile section. Never wrap in `gtimeout`/`timeout` yourself;
-the script already bounds the subprocess. (macOS `coreutils` is not
-required.)
+- **Never read results from the file after recalc** — read them
+  from `values`.
+- Stale `<v>` caches in the file are harmless: `FullCalcOnLoad`
+  forces Excel/LibreOffice to recompute on open.
+- `validate` (static) still inspects cached markers — meaningful
+  only for files last saved by Excel/LibreOffice.
 
-## 6. Sandboxed environments (AF_UNIX)
+## 5. No timeouts to tune
 
-Every invocation routes through `office.soffice.get_soffice_env()`
-(PATH augmentation for the macOS bundle, headless-friendly vars).
-If the host sandbox denies `AF_UNIX` sockets, LibreOffice fails fast
-with an actionable error instead of hanging — retry outside the
-sandbox or on an unrestricted host. No compiler toolchain is needed;
-no `LD_PRELOAD` shim is bundled.
+Evaluation is an in-memory pass, not a subprocess. There is no
+timeout flag; a pathological workbook fails fast with an engine
+error instead of hanging. For 500k+ row files the pass is still
+single-shot — see X6.
 
-## 7. Batch jobs
+## 6. Sandboxes and CI
 
-For hundreds of workbooks per hour, per-call `soffice` spawn
-dominates. Options: keep the machine warm with an
-[`unoserver`](https://github.com/unoconv/unoserver) listener and call
-it instead of `recalc.py`'s engine step, or shard across hosts. The
-JSON contract stays the same — validate downstream against
-`total_errors` / `total_formulas`, not against wall-clock time.
+Nothing to sandbox-escape: no sockets, no child processes, no
+compiler needed at runtime. `validate` and `recalc` run anywhere
+the `bin/xlsx` binary runs. Gate merges on `status`; the binary is
+`go build` output — vendor it or rebuild in CI from `go.mod`.
 
-## 8. CI without LibreOffice
+## 7. Coverage: what the engine evaluates
 
-`--static-only` gives you the structural checks (broken refs, stale
-error markers, formula count gate) with zero dependencies — the
-vendored engine is stdlib-only. Gate merges on
-`status != "errors_found"`; schedule the full dynamic recalculation
-on a LibreOffice host before release. `xlcalculator` /
-[`formulas`](https://github.com/vinci1it2000/formulas) are a
-pure-Python alternative for dynamic evaluation, but neither supports
-array formulas, pivot tables, or custom functions.
+Broad support (SUM/SUMIFS, VLOOKUP/XLOOKUP/INDEX/MATCH, IF/IFS,
+financial, text, date functions — the full list is in Excelize's
+`CalcCellValue` docs). Explicitly **not** evaluated:
 
-## 9. LibreOffice rewrites and openpyxl
+- Array formulas and dynamic arrays (`FILTER`, `SORT`, `UNIQUE`…)
+- Iterative calculation (circular refs with iteration enabled)
+- Implicit / explicit intersection
+- Table formulas (structured references)
+- Pivot-table calculation
 
-LibreOffice serializes `<mergeCell>`, drawings, and some number
-formats in ways openpyxl's default parser cannot read
-(`TypeError: expected <class 'int'>`). The file is intact and opens
-in Excel. After any successful in-place recalculation this skill sets
-`compatibility_hint: "raw_xml_only"`: avoid downstream openpyxl
-rewrites; use the raw-XML workflow (`raw-xml-escape-hatch.md`). For
-readback, `load_workbook(path, read_only=True, data_only=True)`
-(streaming reader skips the merged-cell parser) also works.
+These surface as `unsupported_function` with the engine message in
+`detail` (e.g. `not support FILTER function`). They are never
+silently passed: `total_errors` counts them, `status` goes
+`errors_found`. Verify every such case in Excel before delivery
+(rule 10).
 
-## 10. Why `scanner` is always `raw_xml`
+## 8. Static validation (`xlsx validate`)
 
-Both scans (pre and post) run through the vendored `formula_check`
-engine: `zipfile` + `ElementTree` over the worksheet XML. No
-openpyxl import, no cached-value trust, no format parsing — so vendor
-XML, charts/drawings, and LibreOffice's own rewrites cannot break the
-scan. There is no fallback because there is nothing to fall back
-*from*; treat the reported `total_formulas` / `total_errors` as
-authoritative and do not retry blindly.
+Cached error markers, broken sheet refs, unknown named ranges —
+no evaluation. Same report shape (`scanner: excelize_static`,
+`recalc.performed: false`). Use it for sub-second pre-checks and
+for files whose formulas you do not intend to evaluate.

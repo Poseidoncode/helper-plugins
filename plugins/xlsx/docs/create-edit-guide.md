@@ -1,119 +1,115 @@
-# Create / Edit Guide — openpyxl recipes and gotchas
+# Create / Edit Guide — Excelize recipes
+
+All snippets assume `"github.com/xuri/excelize/v2"` imported as
+`excelize`. Run as small Go programs (`go run`) or test harnesses —
+the CLI covers read/validate/recalc/convert.
 
 ## 1. Minimal create (formula-first)
 
-```python
-from openpyxl import Workbook
-from openpyxl.styles import Font
-
-book = Workbook()
-ws = book.active
-ws.title = "Model"
-ws["A1"], ws["B1"], ws["C1"] = "Quarter", "MAU (mm)", "ARR (¥mm)"
-ws["B2"] = 148
-ws["B2"].font = Font(color="0000FF")          # blue: assumption
-ws["C2"] = "=B2*27*0.85"                      # black: derived (default)
-book.save("mau_forecast.xlsx")
+```go
+f := excelize.NewFile()
+defer f.Close()
+f.SetSheetName("Sheet1", "Model")
+f.SetCellValue("Model", "A1", "Quarter")
+f.SetCellValue("Model", "B1", "MAU (mm)")
+blue, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Color: "0000FF"}})
+f.SetCellValue("Model", "B2", 148)
+f.SetCellStyle("Model", "B2", "B2", blue) // blue: assumption
+f.SetCellFloat("Model", "D2", 0.85, 4, 64)
+f.SetCellFormula("Model", "E2", "=B2*C2*D2") // derived, references inputs
+f.SaveAs("mau_forecast.xlsx")
+// then: bin/xlsx recalc mau_forecast.xlsx
 ```
-
-New workbooks open fine in openpyxl because *you* control the XML.
-Round-tripping *someone else's* file is where §7–§11 apply.
 
 ## 2. Minimal edit (flip inputs, not results)
 
-```python
-from openpyxl import load_workbook
-book = load_workbook("mau_forecast.xlsx")     # data_only=False (default)
-book["Model"]["B2"] = 0.90                    # assumption upstream of C2
-book.save("mau_forecast.xlsx")
-# then: python scripts/recalc.py mau_forecast.xlsx 60
+```go
+f, _ := excelize.OpenFile("mau_forecast.xlsx")
+defer f.Close()
+f.SetCellFloat("Model", "D2", 0.90, 4, 64) // assumption upstream of E2
+f.Save()
+// then: bin/xlsx recalc mau_forecast.xlsx
 ```
 
-## 3. `data_only=True` is read-only safe only
+**Warning:** setting a value on a formula cell deletes the formula
+(the API removes it). Write values only to assumption cells; if a
+target cell holds a formula, trace precedents and edit upstream.
 
-Opening with `data_only=True` replaces every formula object with its
-cached value *in memory*; saving that workbook writes the values back
-and the formulas are gone permanently. Rule: load twice if you need
-both (values for QA, formulas for editing), never save the
-`data_only` handle.
+## 3. Styles and number formats
 
-## 4. Charts (basics)
-
-```python
-from openpyxl.chart import LineChart, Reference
-chart = LineChart()
-chart.add_data(Reference(ws, min_col=3, min_row=1, max_row=13), titles_from_data=True)
-ws.add_chart(chart, "E2")
+```go
+style, _ := f.NewStyle(&excelize.Style{
+    Font: &excelize.Font{Bold: true, Color: "FFFFFF"},
+    Fill: excelize.Fill{Type: "pattern", Color: []string{"4472C4"}, Pattern: 1},
+    NumFmt: 165, // custom formats via NewCustomNumFmt / NewNumFmt
+})
+f.SetCellStyle("Model", "A1", "E1", style)
 ```
 
-Charts survive openpyxl round-trips of files *you* created, but a
-LibreOffice rewrite may re-serialize drawings — after recalc, check
-`compatibility_hint`; if `raw_xml_only`, do not re-save with
-openpyxl or the chart may detach.
+Color palette and format codes: `conventions-guide.md` §2/§5.
 
-## 5. Conditional formatting
+## 4. Merged cells
 
-Keep rules few and range-exact; overlapping rules from repeated
-script runs are the usual cause of "the file got slower". Prefer data
-bars / color scales over per-cell fills you manage by hand.
+```go
+f.MergeCell("Model", "A1", "E1")
+f.UnMergeCell("Model", "A1", "E1")
+```
+
+Only the anchor (top-left) carries the value. Unmerge → broadcast
+anchor → work → re-merge only if layout matters. Never place
+formulas in non-anchor cells of a merged region.
+
+## 5. Charts
+
+```go
+f.AddChart("Model", "G2", &excelize.Chart{
+    Type: excelize.Line,
+    Series: []excelize.ChartSeries{{
+        Name: "Model!$C$1", Categories: "Model!$A$2:$A$13",
+        Values: "Model!$C$2:$C$13",
+    }},
+    Title: []excelize.RichTextRun{{Text: "ARR"}},
+})
+```
+
+Charts are creatable and round-trip — verify rendering in Excel
+before delivery (X7).
 
 ## 6. Named ranges
 
-```python
-from openpyxl.workbook.defined_name import DefinedName
-book.defined_names["TakeRate"] = DefinedName("TakeRate", attr_text="Model!$B$2")
+Read: `f.GetDefinedName()`. Referencing an undefined name is
+flagged by `validate` (`unknown_name_ref`, heuristic). Define names
+in a template authored in Excel when cross-sheet models need them;
+verify in Excel after programmatic edits.
+
+## 7. Row insert / delete and `#REF!`
+
+Use `InsertRows` / `RemoveRow`, then `recalc` and fix reported
+locations. Structural edits shift coordinates — `#REF!` after an
+insert means a formula still points at the old address.
+
+## 8. Streaming writer (large files)
+
+```go
+sw, _ := f.NewStreamWriter("Raw")
+sw.SetRow("A1", []any{"id", "amount"})
+for _, rec := range records {
+    sw.SetRow("A"+itoa(n), []any{rec.ID, rec.Amount})
+}
+sw.Flush()
+f.SaveAs("big.xlsx")
 ```
 
-`formula_check` flags references to undefined names
-(`unknown_name_ref`, heuristic) — define before delivery.
+Raw rows stream with near-constant memory; add the `=SUM`/`=SUMIF`
+summary sheet afterwards and `recalc` (rule 4: full row count, X6).
 
-## 7. Merged cells
+## 9. Reading values back in Go
 
-Only the anchor (top-left) cell carries the value; the rest read as
-`None`. Pattern: `unmerge_cells()` → broadcast the anchor value →
-do your work → re-merge only if layout matters. Never write formulas
-into non-anchor cells of a merged region.
-
-## 8. Shared strings
-
-openpyxl manages `sharedStrings.xml` transparently, but files with
-hundreds of thousands of distinct strings bloat memory. For
-write-heavy jobs prefer xlsxwriter; for surgical string-table edits
-use `engine/shared_strings_builder.py`.
-
-## 9. Row insert / delete and `#REF!`
-
-Inserting or deleting rows shifts coordinates; formulas pointing at
-moved rows go `#REF!`. After structural edits always run `recalc.py`
-and fix the reported locations. For unpacked-XML workflows the engine
-provides `xlsx_insert_row.py` (`--at`, `--formula`, `--copy-style-from`),
-`xlsx_shift_rows.py`, and `xlsx_add_column.py`, which keep shared
-formulas coherent — prefer them over manual XML edits.
-
-## 10. `read_only=True` readback
-
-`load_workbook(path, read_only=True, data_only=True)` streams values
-without building the full DOM: it skips the merged-cell parser, so it
-reads LibreOffice-rewritten files that crash the default parser.
-
-## 11. Raw-XML pattern (formula strings without openpyxl)
-
-When openpyxl cannot parse the file at all, extract formula text
-directly from the worksheet XML:
-
-```bash
-python scripts/office/unpack.py broken.xlsx /tmp/work/
-python - <<'EOF'
-import xml.etree.ElementTree as ET
-NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
-tree = ET.parse("/tmp/work/xl/worksheets/sheet1.xml")
-for c in tree.getroot().iter(NS + "c"):
-    f = c.find(NS + "f")
-    if f is not None and f.text:
-        print(c.get("r"), "=", f.text)
-EOF
+```go
+v, _ := f.GetCellValue("Model", "E2")   // cached <v> (may be stale!)
+fresh, _ := f.CalcCellValue("Model", "E2") // evaluated now
+formula, _ := f.GetCellFormula("Model", "E2")
 ```
 
-This is the same scanner `recalc.py` uses internally
-(`recalc-guide.md` §10). For the full unpack → edit → pack loop, see
-`raw-xml-escape-hatch.md`.
+Prefer `CalcCellValue` (or the recalc `values` map) over cached
+values — see recalc-guide §4.

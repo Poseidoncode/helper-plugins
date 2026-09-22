@@ -1,42 +1,33 @@
-# Windows Tool Bootstrap — Git Bash detection and install
+# Windows Tool Bootstrap — Go toolchain
 
-All scripts and examples in this skill use bash syntax. On Windows,
-execute them via **Git Bash**.
+This skill needs only a Go toolchain. No Python, no LibreOffice,
+no Git Bash.
 
 ## 1. Detect
 
 ```powershell
-where bash
-where python
+go version
 ```
 
-- `bash` found → you have Git Bash; run everything as
-  `bash -c "python scripts/recalc.py file.xlsx 60"`.
-- `bash` missing → install Git for Windows ( §2 ), which bundles it.
-- `python` missing → install Python 3.9+ and re-open the terminal.
+Need `go1.25` or later (Excelize requirement). Older → §2.
 
-## 2. Install
+## 2. Install / upgrade
 
-| Tool | Command |
-|---|---|
-| Git + Git Bash | `winget install Git.Git` |
-| Python 3.9+ | `winget install Python.Python.3` |
-| LibreOffice (for `recalc.py`) | `winget install TheDocumentFoundation.LibreOffice` |
+```powershell
+winget install GoLang.Go
+```
 
-After installing, open a **new** Git Bash window (PATH changes do
-not apply to running shells) and re-run §1.
+Open a **new** terminal afterwards (PATH changes do not apply to
+running shells) and re-run §1.
 
-## 3. LibreOffice notes
+## 3. Build and use
 
-- `scripts/recalc.py` uses headless `--convert-to` (no macro
-  installation); on Windows it finds `soffice.exe` via `PATH` or the
-  default install location. If detection fails, add LibreOffice's
-  `program` directory to `PATH` manually.
-- No-LibreOffice fallback: open the workbook in the LibreOffice GUI,
-  press Ctrl+Shift+F9 (recalculate all), save, then run
-  `python scripts/recalc.py file.xlsx --static-only` to verify.
+```powershell
+cd plugins\xlsx
+go build -o bin\xlsx.exe .\cmd\xlsx
+.\bin\xlsx.exe read report.xlsx --sheet Model
+.\bin\xlsx.exe recalc report.xlsx
+```
 
-## 4. Path mapping
-
-Git Bash maps `/tmp/` automatically; all skill scripts work as-is.
-Use forward slashes in arguments even on Windows.
+`bin/` is gitignored; rebuild after pulling skill updates.
+Use forward slashes or backslashes in arguments — both work.

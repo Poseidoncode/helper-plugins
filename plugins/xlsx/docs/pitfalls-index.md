@@ -7,6 +7,11 @@ template verbatim, substitute the `Slots`, and execute step by step.
 Multiple partial matches → fuse: take the strictest verification from
 each, never relax a constraint.
 
+Build once per session: `go build -o bin/xlsx ./cmd/xlsx` (from the
+skill root). Global gates (unless the user asked for a static
+snapshot): `bin/xlsx recalc` returns `status == "success"`,
+`total_errors == 0`, `total_formulas > 0` (rule 3).
+
 ## Quick lookup
 
 | ID | Task signature (user keywords) | Trace |
@@ -14,15 +19,11 @@ each, never relax a constraint.
 | X1 | create, new workbook, forecast, model, template from scratch | §X1 |
 | X2 | edit, update, fix value, change assumption, existing file | §X2 |
 | X3 | read, analyze, inspect, summarize, what is in this file | §X3 |
-| X4 | convert, csv, tsv, ods, export, import | §X4 |
+| X4 | convert, csv, tsv, export, import | §X4 |
 | X5 | error, `#REF!`, `#DIV/0!`, `#N/A`, broken, repair | §X5 |
 | X6 | large, slow, 500k rows, huge file, memory | §X6 |
 | X7 | pivot, slicer, filter dropdown, dashboard, chart | §X7 |
 | X8 | superstore, multi-format, pdf report, reverse validation | §X8 + `superstore-multiformat-conversion-case.md` |
-
-Global gates (apply to every template unless the user explicitly asked
-for a static snapshot): `recalc.py` returns `status == "success"`,
-`total_errors == 0`, and `total_formulas > 0` (rule 3).
 
 ---
 
@@ -35,19 +36,20 @@ Slots: `{OUTPUT_XLSX}`, `{COMPANY}`, `{METRICS}`, `{ASSUMPTIONS}`.
 
 Trace:
 
-1. Put every user-supplied number in a leading **Assumptions** block,
-   blue font (`0000FF`), with a `Source: …` annotation next door
-   (`conventions-guide.md` §3).
-2. Write every derived value as a live `=…` formula referencing the
-   Assumptions block — never paste a computed number (rule 2).
-3. Enforce stated ranges in the formula:
-   `=ROUND(MIN(MAX(raw, 0), 100), 1)` for "score 0–100" (rule 8).
-4. Run `python scripts/recalc.py {OUTPUT_XLSX} 60` → expect
-   `status == "success"`, `total_errors == 0`, `total_formulas > 0`.
-5. Spot-check `MIN()` / `MAX()` of each derived column after recalc.
+1. Write a small Go program (cookbook §3): every user-supplied
+   number in a leading **Assumptions** block, blue font, with a
+   `Source: …` annotation next door (`conventions-guide.md` §3).
+2. Every derived value as `SetCellFormula` referencing the
+   Assumptions block — never `SetCellValue` with a computed number
+   (rule 2).
+3. Enforce stated ranges in the formula (rule 8).
+4. `bin/xlsx recalc {OUTPUT_XLSX}` → `success`, `total_errors == 0`,
+   `total_formulas > 0`. Read fresh results from the `values` map —
+   never from stale `<v>` caches.
+5. Spot-check computed `MIN()`/`MAX()` of each derived column.
 
-Past failure: totals computed in pandas and written back as values —
-the workbook looked right until the user edited an input.
+Past failure: totals pasted as values — correct until the first
+input edit.
 
 ## X2 — Edit an existing workbook in place
 
@@ -58,22 +60,20 @@ Slots: `{FILE}`, `{SHEET}`, `{EDITS}`.
 
 Trace:
 
-1. Inspect first: `python engine/xlsx_reader.py {FILE} --json`
-   (sheet names, headers, merged regions). Never modify the source
-   before understanding it.
-2. Flip **inputs**, not results. If the target cell holds a formula,
-   trace its precedents and edit the assumption upstream.
-3. If `load_workbook` (openpyxl) must be used: open with default
-   `data_only=False`. `data_only=True` is read-only safe only —
-   saving such a workbook deletes every formula.
-4. If the file has VBA / pivot caches / slicers / external links:
-   do NOT round-trip with openpyxl at all — use the raw-XML escape
-   hatch (`raw-xml-escape-hatch.md`).
-5. Rerun `recalc.py` → global gates. If `#REF!` appears, a formula
-   still points at a shifted row — search, fix coordinate, rerun.
+1. Inspect first: `bin/xlsx read {FILE} --sheet {SHEET}`
+   (structure, headers, dimension). Never modify before
+   understanding.
+2. Flip **inputs**, not results. Trace precedents, edit the
+   assumption upstream. Setting a value on a formula cell destroys
+   the formula (Excelize removes it) — so write values only to
+   assumption cells.
+3. Files with VBA / pivot caches / slicers / external links: read
+   the fidelity notes (`raw-xml-escape-hatch.md`) and verify the
+   result in Excel.
+4. Rerun `recalc` → global gates. `#REF!` means a formula still
+   points at a shifted row — fix the coordinate, rerun.
 
-Past failure: saved with `data_only=True`, permanently replacing all
-formulas with cached values.
+Past failure: value written onto a formula cell, silently deleting it.
 
 ## X3 — Read / analyze (no modification)
 
@@ -84,35 +84,33 @@ Slots: `{FILE}`, `{QUESTION}`.
 
 Trace:
 
-1. `python engine/xlsx_reader.py {FILE} --json [--sheet NAME]` for
-   structure discovery (never modify the source file).
-2. Load tabular data with pandas/polars for analysis and QA.
-3. If the user then wants the analysis *in* the workbook, switch to
-   X2 and emit summaries as `=SUMIFS` / `=COUNTIFS` over the Raw
-   sheet — never write `groupby` results back as values (rule 5).
+1. `bin/xlsx read {FILE} [--sheet NAME] [--json]` — structure
+   discovery first, never modify the source.
+2. Pull tabular data into the analysis tool of choice; CSV/TSV
+   inputs read directly.
+3. If the analysis must live *in* the workbook, switch to X2 and
+   emit summaries as `=SUMIFS` / `=COUNTIFS` over the Raw sheet —
+   never paste aggregates as values (rule 5).
 
-Past failure: Python-side aggregation written back as static numbers,
-silently breaking the edit→recalc→totals-move contract.
+Past failure: aggregates pasted as static numbers, breaking the
+edit→recalc→totals-move contract.
 
 ## X4 — Convert between formats
 
 Match signatures: "convert {INPUT} to xlsx", "csv to excel",
-"export as csv", "ods upload".
+"export as csv".
 
 Slots: `{INPUT}`, `{OUTPUT}`.
 
 Trace:
 
-1. Format-unknown input → `pyexcel` (`save_book_as`); known tabular
-   input → pandas read.
-2. Conversion preserves **raw values only**. If the output needs
-   totals/ratios, continue with X1: write raw rows, add `=…`
-   formulas via openpyxl, recalc.
-3. Year columns: force text (`"FY2025"`) so `2025` is not rendered
-   as `2,025` (`conventions-guide.md` §2).
-4. Rerun `recalc.py` on any `.xlsx` output → global gates.
+1. `bin/xlsx convert {INPUT} {OUTPUT} [--sheet Raw]` — raw values
+   only, numeric-looking cells stay numeric, years stay text.
+2. Conversion preserves **raw values only**. Totals/ratios →
+   continue with X1: add `=` formulas, recalc.
+3. Rerun `recalc` on the `.xlsx` output → global gates.
 
-Past failure: year `2025` thousands-separated to `2,025` in output.
+Past failure: year `2025` rendered as `2,025`.
 
 ## X5 — Repair formula errors
 
@@ -123,19 +121,18 @@ Slots: `{FILE}`.
 
 Trace:
 
-1. Run `python scripts/recalc.py {FILE} 60` and read
-   `error_summary` (≤20 locations per marker).
-2. `#REF!` → shifted/deleted rows: fix coordinates (X2 step 5).
-   `#DIV/0!` → wrap denominator: `IFERROR(num/denom, 0)` or
-   `IF(denom=0, "", num/denom)`. `#N/A` → check `VLOOKUP`/`MATCH`
-   key whitespace, case, and type (`123` vs `"123"`).
-3. Rerun `recalc.py` until `total_errors == 0`.
-4. If openpyxl itself crashes on the file (merged-cell rewrites,
-   vendor XML): trust the raw-XML scan — it never parses through
-   openpyxl — and switch further edits to the raw-XML hatch.
+1. `bin/xlsx recalc {FILE}` and read `error_summary` (≤20
+   locations per marker) plus the `detail` field on each error.
+2. `#REF!` → shifted/deleted rows: fix coordinates (X2 step 4).
+   `#DIV/0!` → `IFERROR(num/denom, 0)` or
+   `IF(denom=0, "", num/denom)`. `#N/A` → key
+   whitespace/case/type. Missing-sheet refs surface as `#NAME?`
+   (engine skew) — read `missing_sheet`, fix the ref.
+3. `unsupported_function` → calc engine limit, not a formula bug:
+   verify in Excel, don't ship blind (rule 10).
+4. Rerun `recalc` until `total_errors == 0`.
 
-Past failure: suppressing stderr (`2>/dev/null`) hid the only signal;
-always redirect to a log file and grep instead (rule 7).
+Past failure: stderr suppressed, hiding the only signal (rule 7).
 
 ## X6 — Large files (500k+ rows / hundreds of MB)
 
@@ -145,20 +142,16 @@ Slots: `{FILE}`, `{OUTPUT_XLSX}`.
 
 Trace:
 
-1. Read/filter/join with pandas/polars — never walk cells with
-   openpyxl (too slow, encourages accidental sampling).
-2. **Write the full row count** (rule 4). `df.sample(N)` /
-   `df.head(N)` silently destroys every downstream aggregation.
-3. Throughput-bound writes → xlsxwriter or
-   `Workbook(write_only=True)` streaming
+1. Inspect with bounded reads (`read --preview`, `--sheet`).
+2. **Write the full row count** (rule 4) via the streaming writer
    (`advanced-reference.md` §6).
-4. Derived values still go in as `=…` formulas; raise the recalc
-   timeout (`recalc.py {FILE} 180`).
-5. Row-count canary: compare Raw row count before/after; any
-   `=SUMIF` summary must reconcile to the full count.
+3. Derived values still go in as `=` formulas; `recalc` is a single
+   in-memory pass — no per-file subprocess, no timeout tuning.
+4. Row-count canary: Raw count before/after; summaries must
+   reconcile to the full count.
 
-Past failure: 400k rows down-sampled to 100k "because openpyxl is
-slow" — the summary was off by ~75% and looked plausible.
+Past failure: sampled 400k→100k rows; summary off by ~75%, looked
+plausible.
 
 ## X7 — Pivots, slicers, charts, dashboards
 
@@ -169,28 +162,25 @@ Slots: `{FILE}`, `{FEATURE}`.
 
 Trace:
 
-1. Summaries the user can recompute → Excel-native: real pivot
-   tables or `=SUMIFS` / `=COUNTIFS` over the Raw sheet (rule 5).
-2. Slicers cannot be authored by openpyxl (no API for GUID-bound
-   pivot-cache references). Two paths: (a) template inheritance —
-   author `template.xlsx` once in Excel/LibreOffice, write into its
-   named range; (b) raw-XML transplant via
-   `scripts/office/unpack.py` + `pack.py`.
-3. No template available → say so explicitly; never silently
-   downgrade to a static dropdown (rule 6).
-4. Charts via openpyxl are creatable but fragile across
-   LibreOffice rewrites — prefer `compatibility_hint == "raw_xml_only"`
-   handling after recalc.
+1. Recomputable summaries → real pivot tables or `=SUMIFS` /
+   `=COUNTIFS` over Raw (rule 5). The calc engine does NOT evaluate
+   pivots — verify them in Excel.
+2. Slicers cannot be authored from scratch. Template inheritance:
+   author `template.xlsx` once in Excel, write into its named
+   range, verify in Excel.
+3. No template → say so explicitly, never silently downgrade
+   (rule 6).
+4. Charts via `AddChart` are creatable — verify rendering in Excel
+   before delivery.
 
-Past failure: slicer silently replaced with a data-validation
-dropdown; user discovered it only in the review meeting.
+Past failure: slicer silently replaced with a dropdown; discovered
+in review.
 
 ## X8 — Progressive multi-format case (Superstore)
 
 Match signatures: "superstore", "multiple formats", "pdf report",
 "round-trip validation".
 
-See `superstore-multiformat-conversion-case.md` for the full worked
-trace: Excel → CSV/JSON/HTML→PDF plus XML-template CSV→XLSX reverse
-validation. Verification: every aggregation recomputed from the Raw
-sheet after each format hop; row-count canary at every step.
+See `superstore-multiformat-conversion-case.md`: Excel → CSV/JSON/
+HTML→PDF plus CSV→XLSX reverse validation (`convert` + formulas +
+`recalc`). Row-count canary at every hop.

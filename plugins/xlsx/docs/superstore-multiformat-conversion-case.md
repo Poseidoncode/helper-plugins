@@ -7,36 +7,34 @@ validation back to xlsx. Canonical template X8
 ## Setup
 
 Source: `superstore.xlsx`, sheet `Orders` (row count `N`, recorded
-before anything else — the canary). Target outputs:
+before anything else — the canary). Targets:
 
-1. `orders.csv` — raw values, UTF-8, years as text (`FY2025`)
+1. `orders.csv` — raw values, UTF-8, years as text
 2. `orders_summary.json` — machine-readable aggregates
 3. `orders_report.html` → PDF — human-readable report
-4. `orders_rt.xlsx` — reverse validation: CSV re-ingested through
-   the XML-template path back into xlsx
+4. `orders_rt.xlsx` — reverse validation: CSV re-ingested back
+   into xlsx with live formulas
 
 ## Trace
 
-1. **Canary.** Record `N` = Raw row count and the control totals
-   (`SUM(Sales)`, `SUM(Profit)`) from the source.
-2. **CSV.** Values only; force year columns to text so `2025` does
-   not become `2,025`. Re-count rows: must equal `N`.
-3. **JSON.** Aggregates computed from the CSV (document the query);
-   cross-check against the control totals from step 1.
-4. **HTML→PDF.** Render the summary tables; print to PDF via the
-   browser/CLI toolchain available on the host. No new numbers are
-   introduced at this step — it is presentation only.
-5. **Reverse validation.** Rebuild an xlsx from the CSV using the
-   raw-XML path (`unpack.py` a minimal template, inject rows,
-   `pack.py`), re-add the `=SUM`/`=SUMIF` summary formulas, run
-   `recalc.py` → `status == "success"`, `total_errors == 0`,
-   `total_formulas > 0`.
-6. **Reconcile.** Control totals from the rebuilt workbook must
-   equal step 1 exactly; row count must equal `N`.
+1. **Canary.** `bin/xlsx read superstore.xlsx --sheet Orders`:
+   record `N` and control totals (`SUM(Sales)`, `SUM(Profit)` —
+   via `recalc` `values` or Excel).
+2. **CSV.** Values only; year columns forced to text. Re-count
+   rows: must equal `N`.
+3. **JSON.** Aggregates computed from the CSV (document the
+   method); cross-check against step 1 control totals.
+4. **HTML→PDF.** Presentation only — no new numbers introduced.
+5. **Reverse validation.** `bin/xlsx convert orders.csv
+   orders_rt.xlsx`, re-add the `=SUM`/`=SUMIF` summary formulas
+   (X1), `bin/xlsx recalc orders_rt.xlsx` → `success`,
+   `total_errors == 0`, `total_formulas > 0`.
+6. **Reconcile.** Control totals from the rebuilt workbook equal
+   step 1 exactly; row count equals `N`.
 
 ## Pass criteria
 
 - Row count `N` identical across xlsx → csv → xlsx.
-- Control totals identical to the source at every hop.
+- Control totals identical at every hop.
 - Final `orders_rt.xlsx` passes the global gates with live
-   formulas, not pasted aggregates.
+  formulas, not pasted aggregates.
