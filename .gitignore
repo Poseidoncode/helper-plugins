@@ -7,3 +7,7 @@ waf-*-*/
 waf3-*-*/
 # Lockfile
 .lock-waf_*_build
+
+# Python bytecode (skill engines are shipped as source)
+__pycache__/
+*.py[cod]
