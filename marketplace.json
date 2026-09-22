@@ -178,6 +178,27 @@
         "Force sync Cursor model definitions into Helper api-config.json.",
         "Switch my active model to Cursor Claude Sonnet 4.6 for complex refactoring."
       ]
+    },
+    {
+      "id": "xlsx",
+      "name": "xlsx",
+      "displayName": "Spreadsheet (xlsx) Assistant",
+      "version": "1.0.0",
+      "category": "Productivity",
+      "description": "Read, edit, create, and recalculate .xlsx/.xlsm/.csv/.tsv with live formulas (pandas + openpyxl + LibreOffice recalc).",
+      "longDescription": "Recipe-first spreadsheet skill: pandas/polars for tabular read, openpyxl for live = formulas/styles/charts, LibreOffice headless recalc with zero-error gate, formula-first financial-model conventions, and csv/ods/tsv conversion.",
+      "author": "Helper Ecosystem WG",
+      "type": "skill",
+      "tags": ["spreadsheet", "xlsx", "excel", "formula", "recalc", "openpyxl", "csv"],
+      "sourceUrl": "https://github.com/Poseidoncode/helper-plugins.git",
+      "gitRef": "main",
+      "subpath": "plugins/xlsx",
+      "skills": ["xlsx"],
+      "promptStarters": [
+        "Create a quarterly forecast workbook with live formulas and recalculate it.",
+        "Read sales.xlsx, rebuild the summary as =SUMIFS formulas, and verify zero recalc errors.",
+        "Convert this CSV to xlsx with formatted headers and live totals."
+      ]
     }
   ],
   "profiles": [
